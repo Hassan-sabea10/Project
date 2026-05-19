@@ -1,0 +1,278 @@
+#include <iostream>
+#include <cmath>
+#include <string>
+using namespace std;
+
+// ═══════════════════════════════════════════════════════════
+//                        Constants
+// ═══════════════════════════════════════════════════════════
+
+const float WASTE_FACTOR   = 1.02;  // 2% waste factor during transport
+
+// Material coefficients based on Iraqi engineering standards
+const int   BRICKS_PER_M2  = 60;    // bricks per wall m2
+const float CEMENT_PER_M2  = 1.2;   // cement bags per m2
+const float SAND_PER_M2    = 0.08;  // sand tons per m2
+const float IRON_PER_M2    = 25.0;  // iron kg per m2
+
+// Price per m2 in USD (Baghdad market 2024)
+const float PRICE_ECONOMIC = 180.0;
+const float PRICE_STANDARD = 320.0;
+const float PRICE_LUXURY   = 550.0;
+
+// Default standard floor height in Iraq
+const float DEFAULT_HEIGHT  = 3.0;
+
+
+// ═══════════════════════════════════════════════════════════
+//                   House Data Structure
+// ═══════════════════════════════════════════════════════════
+
+struct House {
+    // ── Inputs ──
+    float area;         // floor area in m2
+    int   floors;       // number of floors
+    float height;       // height of one floor in meters
+    int   buildType;    // 1=Economic  2=Standard  3=Luxury
+
+    // ── Outputs (calculated by functions) ──
+    float wallArea;     // total wall area in m2
+    int   bricks;       // number of bricks (includes waste)
+    int   cementBags;   // number of cement bags (includes waste)
+    float sand;         // sand in tons (includes waste)
+    float iron;         // iron in kg (includes waste)
+    float totalCost;    // total estimated cost in USD
+};
+
+
+// ═══════════════════════════════════════════════════════════
+//          printLine — prints a separator line
+// ═══════════════════════════════════════════════════════════
+
+void printLine() {
+    cout << "  ================================================\n";
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    inputData — reads house data from user with validation
+// ═══════════════════════════════════════════════════════════
+
+void inputData(House &h) {
+
+    // ── floor area ──
+    cout << "\n  > Enter floor area (m2)              : ";
+    cin  >> h.area;
+    while (h.area <= 0) {
+        cout << "  ! Error: area must be greater than zero\n";
+        cout << "  > Enter floor area again             : ";
+        cin  >> h.area;
+    }
+
+    // ── number of floors ──
+    cout << "  > Enter number of floors (1 to 5)   : ";
+    cin  >> h.floors;
+    while (h.floors < 1 || h.floors > 5) {
+        cout << "  ! Error: floors must be between 1 and 5\n";
+        cout << "  > Enter number of floors again       : ";
+        cin  >> h.floors;
+    }
+
+    // ── floor height ──
+    // cin.ignore skips the leftover Enter from the previous cin
+    cout << "  > Enter floor height in meters       : ";
+    cin.ignore();
+    cin  >> h.height;
+    while (h.height < 2.5 || h.height > 6.0) {
+        cout << "  ! Error: height must be between 2.5 and 6.0 meters\n";
+        cout << "  > Enter floor height again           : ";
+        cin  >> h.height;
+    }
+
+    // ── build type ──
+    cout << "\n  Build Type:\n";
+    cout << "    1 - Economic\n";
+    cout << "    2 - Standard\n";
+    cout << "    3 - Luxury\n";
+    cout << "  > Choose build type (1/2/3)          : ";
+    cin  >> h.buildType;
+    while (h.buildType < 1 || h.buildType > 3) {
+        cout << "  ! Error: choose 1, 2 or 3 only\n";
+        cout << "  > Choose again                       : ";
+        cin  >> h.buildType;
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calcWallArea — calculates total wall area
+//
+//    We assume the house is roughly square shaped
+//    Perimeter = 4 x sqrt(area)
+//    Wall area  = perimeter x floor height x number of floors
+// ═══════════════════════════════════════════════════════════
+
+void calcWallArea(House &h) {
+    // calculate perimeter assuming square shape
+    float perimeter = 4.0 * sqrt(h.area);
+
+    // wall area = perimeter x height x floors
+    h.wallArea = perimeter * h.height * h.floors;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateBricks — calculates number of bricks
+//
+//    Formula : wall area x 60 x 1.02
+//    Bricks are calculated on wall area since they are built in walls
+// ═══════════════════════════════════════════════════════════
+
+void calculateBricks(House &h) {
+    // depends on wallArea calculated by calcWallArea
+    h.bricks = (int)(h.wallArea * BRICKS_PER_M2 * WASTE_FACTOR);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateCement — calculates number of cement bags
+//
+//    Formula : area x floors x 1.2 x 1.02
+//    1.2 bags/m2 covers brickwork, concrete and plastering
+// ═══════════════════════════════════════════════════════════
+
+void calculateCement(House &h) {
+    h.cementBags = (int)(h.area * h.floors * CEMENT_PER_M2 * WASTE_FACTOR);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateSand — calculates sand quantity in tons
+//
+//    Formula : area x floors x 0.08 x 1.02
+//    0.08 tons/m2 covers mortar, concrete and tiling
+// ═══════════════════════════════════════════════════════════
+
+void calculateSand(House &h) {
+    h.sand = h.area * h.floors * SAND_PER_M2 * WASTE_FACTOR;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateIron — calculates iron quantity in kg
+//
+//    Formula : area x floors x 25 x heightFactor x 1.02
+//    heightFactor = height / 3.0
+//    taller floors need longer columns so iron increases
+// ═══════════════════════════════════════════════════════════
+
+void calculateIron(House &h) {
+    // height factor compensates for longer columns above 3m
+    float heightFactor = h.height / DEFAULT_HEIGHT;
+
+    h.iron = h.area * h.floors * IRON_PER_M2 * heightFactor * WASTE_FACTOR;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateCost — calculates total estimated cost
+//
+//    Formula : area x floors x price per meter
+//    price is determined by the selected build type
+// ═══════════════════════════════════════════════════════════
+
+void calculateCost(House &h) {
+    float pricePerMeter;
+
+    // set price per m2 based on build type
+    if      (h.buildType == 1) pricePerMeter = PRICE_ECONOMIC;
+    else if (h.buildType == 2) pricePerMeter = PRICE_STANDARD;
+    else                       pricePerMeter = PRICE_LUXURY;
+
+    h.totalCost = h.area * h.floors * pricePerMeter;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    calculateAll — runs all calculation functions in order
+// ═══════════════════════════════════════════════════════════
+
+void calculateAll(House &h) {
+    calcWallArea   (h);   // first  : wall area (needed by calculateBricks)
+    calculateBricks(h);   // second : bricks (depends on wallArea)
+    calculateCement(h);   // third  : cement
+    calculateSand  (h);   // fourth : sand
+    calculateIron  (h);   // fifth  : iron (depends on height)
+    calculateCost  (h);   // sixth  : cost
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//    showReport — displays the final house report
+// ═══════════════════════════════════════════════════════════
+
+void showReport(House &h) {
+
+    // set build type name for display
+    string typeName;
+    if      (h.buildType == 1) typeName = "Economic";
+    else if (h.buildType == 2) typeName = "Standard";
+    else                       typeName = "Luxury  ";
+
+    cout << "\n";
+    printLine();
+    cout << "           BuildVision — House Report\n";
+    printLine();
+
+    // ── input section ──
+    cout << "  [ Input Data ]\n";
+    cout << "  Floor Area         : " << h.area              << " m2\n";
+    cout << "  Number of Floors   : " << h.floors            << " floor(s)\n";
+    cout << "  Floor Height       : " << h.height            << " m\n";
+    cout << "  Total Height       : " << h.height * h.floors << " m\n";
+    cout << "  Build Type         : " << typeName            << "\n";
+    cout << "  Total Wall Area    : " << h.wallArea          << " m2\n";
+
+    printLine();
+
+    // ── materials section ──
+    cout << "  [ Materials Required — includes 2% waste ]\n";
+    cout << "  Bricks             : " << h.bricks     << " bricks\n";
+    cout << "  Cement Bags        : " << h.cementBags << " bags (50kg each)\n";
+    cout << "  Sand               : " << h.sand       << " tons\n";
+    cout << "  Iron               : " << h.iron       << " kg\n";
+
+    printLine();
+
+    // ── cost section ──
+    cout << "  [ Estimated Cost ]\n";
+    cout << "  Total Cost         : $" << h.totalCost << "\n";
+
+    printLine();
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//                        Main Function
+// ═══════════════════════════════════════════════════════════
+
+int main() {
+
+    // single house variable
+    House h;
+
+    printLine();
+    cout << "       BuildVision — Smart Construction Calculator\n";
+    cout << "       Iraqi Engineering Standards 2024\n";
+    printLine();
+
+    inputData   (h);    // read input data
+    calculateAll(h);    // run all calculations
+    showReport  (h);    // display report
+
+    printLine();
+    cout << "  Program finished successfully.\n";
+    printLine();
+
+    return 0;
+}
